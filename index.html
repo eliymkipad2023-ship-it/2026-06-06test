@@ -3,240 +3,319 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>勉強進捗トラッカー</title>
+  <title>学習時間トラッカー</title>
   <!--
-    勉強進捗トラッカー（単一ファイル・外部依存ゼロ）
+    学習時間トラッカー（単一ファイル・自己完結）
     HTML / CSS / JavaScript をすべてこの1ファイルにインラインで記述しています。
-    データはブラウザの localStorage にのみ保存され、サーバーへは送信されません。
+    外部依存は Chart.js（CDN）のみ。データはブラウザの localStorage に保存します。
   -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <style>
-    /* ===== 基本設定（リセット＆カラー） ===== */
+    /* ===== カラー & 基本設定 ===== */
     :root {
-      --bg: #f5f7fa;          /* 背景：淡いグレー */
-      --card: #ffffff;        /* カード／フォーム */
-      --accent: #2563eb;      /* アクセント（青） */
-      --accent-press: #1d4ed8;/* 押下時の青 */
-      --text: #1f2937;        /* 本文テキスト */
-      --muted: #6b7280;       /* 補助テキスト */
-      --danger: #ef4444;      /* 削除（控えめな赤） */
-      --border: #e5e7eb;      /* 罫線 */
+      --bg: #f5f7fa;
+      --card: #ffffff;
+      --accent: #4A90D9;
+      --accent-press: #357ABD;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --danger: #E74C3C;
+      --danger-press: #c0392b;
+      --success: #27AE60;
+      --border: #e5e7eb;
+      --over: #27AE60;
     }
 
     * { box-sizing: border-box; }
 
-    html, body {
-      margin: 0;
-      padding: 0;
-    }
+    html, body { margin: 0; padding: 0; }
 
     body {
       background: var(--bg);
       color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN",
-                   "Hiragino Sans", "Yu Gothic", Meiryo, sans-serif;
+      font-family: -apple-system, "Hiragino Sans", BlinkMacSystemFont,
+                   "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, sans-serif;
       line-height: 1.6;
       -webkit-text-size-adjust: 100%;
+      font-size: 16px;
     }
 
-    /* ===== レイアウト（中央寄せ・最大幅） ===== */
     .app {
-      max-width: 520px;
+      max-width: 1100px;
       margin: 0 auto;
       padding: 16px 16px 48px;
     }
 
+    /* ===== ヘッダー ===== */
     .header {
-      text-align: center;
-      padding: 8px 0 4px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 18px 20px;
+      margin-bottom: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.05);
     }
     .header h1 {
+      margin: 0 0 10px;
       font-size: 22px;
-      margin: 8px 0 4px;
+      letter-spacing: .02em;
     }
-    .header .subtitle {
-      margin: 0;
-      color: var(--muted);
-      font-size: 13px;
+    .header h1 .icon { margin-right: 6px; }
+
+    .achievement { display: none; }
+    .achievement.visible { display: block; }
+    .achievement .ach-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 6px;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+    .achievement .ach-time { font-size: 15px; color: var(--muted); }
+    .achievement .ach-time strong { color: var(--text); font-size: 17px; }
+    .achievement .ach-pct {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--accent);
+    }
+    .achievement.done .ach-pct { color: var(--success); }
+
+    .progress-track {
+      width: 100%;
+      height: 14px;
+      background: #e8edf3;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      background: var(--accent);
+      border-radius: 999px;
+      transition: width .35s ease;
+    }
+    .achievement.done .progress-fill { background: var(--success); }
+    .achievement.over .progress-fill {
+      background: repeating-linear-gradient(45deg, var(--success), var(--success) 8px, #1e8f50 8px, #1e8f50 16px);
     }
 
-    /* ===== 共通カード ===== */
+    /* ===== レイアウト ===== */
+    .layout {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+    }
+    @media (min-width: 768px) {
+      .layout {
+        grid-template-columns: minmax(320px, 380px) 1fr;
+        align-items: start;
+      }
+    }
+    .col { display: flex; flex-direction: column; gap: 16px; }
+
+    /* ===== カード ===== */
     .card {
       background: var(--card);
-      border-radius: 12px;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.04);
-      padding: 20px;
-      margin-top: 16px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 18px 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.05);
     }
-
-    /* ===== 合計表示（主役） ===== */
-    .summary {
-      text-align: center;
+    .card h2 {
+      margin: 0 0 14px;
+      font-size: 17px;
     }
-    .summary-label {
-      color: var(--muted);
+    .card h3 {
+      margin: 18px 0 8px;
       font-size: 14px;
-      margin: 0;
-    }
-    .summary-today {
-      font-size: 48px;
-      font-weight: 800;
-      color: var(--accent);
-      margin: 4px 0 8px;
-      line-height: 1.1;
-      word-break: keep-all;
-    }
-    .summary-total {
       color: var(--muted);
-      font-size: 15px;
-      margin: 0;
-    }
-    .summary-total strong {
-      color: var(--text);
-      font-weight: 700;
     }
 
-    /* ===== フォーム ===== */
-    .field {
-      margin-bottom: 14px;
-    }
-    .field label {
+    /* ===== フォーム要素 ===== */
+    label.field { display: block; margin-bottom: 12px; }
+    label.field .lbl {
       display: block;
       font-size: 13px;
-      font-weight: 600;
-      margin-bottom: 6px;
-    }
-    .field input {
-      width: 100%;
-      min-height: 44px;
-      padding: 0 12px;
-      font-size: 16px; /* iOS の自動ズーム防止のため16px以上 */
-      color: var(--text);
-      background: #fff;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      -webkit-appearance: none;
-      appearance: none;
-    }
-    .field input:focus {
-      outline: 2px solid var(--accent);
-      outline-offset: 1px;
-      border-color: var(--accent);
-    }
-    .minutes-wrap {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .minutes-wrap input {
-      flex: 1;
-    }
-    .minutes-wrap .unit {
       color: var(--muted);
-      font-size: 15px;
+      margin-bottom: 4px;
     }
-
-    .btn-submit {
+    input[type="text"], input[type="number"], select {
       width: 100%;
-      min-height: 48px;
-      margin-top: 4px;
       font-size: 16px;
-      font-weight: 700;
-      color: #fff;
-      background: var(--accent);
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #fff;
+      color: var(--text);
+      min-height: 44px;
     }
-    .btn-submit:hover { background: var(--accent-press); }
-    .btn-submit:active { background: var(--accent-press); }
-    .btn-submit:focus-visible {
-      outline: 2px solid var(--accent-press);
-      outline-offset: 2px;
+    input:focus, select:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(74,144,217,.18);
     }
 
-    /* ===== エラー表示 ===== */
-    .error {
+    .row2 { display: flex; gap: 10px; }
+    .row2 > * { flex: 1; }
+
+    button {
+      font-family: inherit;
+      font-size: 16px;
+      cursor: pointer;
+      border: none;
+      border-radius: 10px;
+      min-height: 44px;
+      padding: 10px 16px;
+      transition: background .15s ease, opacity .15s ease;
+    }
+    button.primary {
+      width: 100%;
+      background: var(--accent);
+      color: #fff;
+      font-weight: 700;
+    }
+    button.primary:hover { background: var(--accent-press); }
+    button.primary:active { transform: translateY(1px); }
+
+    button.danger-outline {
+      background: #fff;
+      color: var(--danger);
+      border: 1px solid var(--danger);
+    }
+    button.danger-outline:hover { background: #fdecea; }
+
+    button.secondary {
+      background: #eef2f7;
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    button.secondary:hover { background: #e2e8f0; }
+
+    .error-msg {
       color: var(--danger);
       font-size: 13px;
-      margin: 0 0 12px;
       min-height: 18px;
+      margin: 2px 0 8px;
     }
-    .error:empty { margin: 0; min-height: 0; }
 
-    /* ===== 一覧 ===== */
-    .list-title {
-      font-size: 16px;
-      margin: 0 0 12px;
+    /* ===== タブ（グラフ） ===== */
+    .tabs {
+      display: inline-flex;
+      background: #eef2f7;
+      border-radius: 10px;
+      padding: 4px;
+      margin-bottom: 14px;
     }
-    .record-list {
-      list-style: none;
+    .tabs button {
+      min-height: 38px;
+      padding: 6px 18px;
+      background: transparent;
+      color: var(--muted);
+      font-weight: 600;
+      border-radius: 8px;
+    }
+    .tabs button.active {
+      background: #fff;
+      color: var(--accent);
+      box-shadow: 0 1px 2px rgba(0,0,0,.1);
+    }
+
+    .chart-wrap { position: relative; height: 320px; }
+    .chart-empty {
+      display: none;
+      text-align: center;
+      color: var(--muted);
+      padding: 40px 0;
+    }
+
+    /* ===== 履歴リスト ===== */
+    .history-list {
+      max-height: 420px;
+      overflow-y: auto;
       margin: 0;
       padding: 0;
+      list-style: none;
     }
-    .record-item {
+    .history-item {
       display: flex;
       align-items: center;
       gap: 10px;
-      padding: 12px 4px;
+      padding: 10px 4px;
       border-bottom: 1px solid var(--border);
     }
-    .record-item:last-child { border-bottom: none; }
-    .record-date {
-      color: var(--muted);
-      font-size: 13px;
-      width: 52px;
-      flex-shrink: 0;
+    .history-item:last-child { border-bottom: none; }
+    .hi-color {
+      width: 12px; height: 12px;
+      border-radius: 3px;
+      flex: 0 0 auto;
     }
-    .record-subject {
-      flex: 1;
-      font-size: 15px;
+    .hi-main { flex: 1; min-width: 0; }
+    .hi-subject { font-weight: 600; }
+    .hi-date { font-size: 12px; color: var(--muted); }
+    .hi-minutes {
+      font-variant-numeric: tabular-nums;
       font-weight: 600;
-      word-break: break-word;
-    }
-    .record-minutes {
-      color: var(--text);
-      font-size: 14px;
       white-space: nowrap;
     }
-    .btn-delete {
-      flex-shrink: 0;
-      width: 40px;
-      height: 40px;
+    .hi-del {
+      flex: 0 0 auto;
+      min-height: 36px;
+      min-width: 44px;
+      padding: 4px 10px;
+      font-size: 13px;
+      background: #fff;
+      color: var(--danger);
+      border: 1px solid var(--border);
+    }
+    .hi-del:hover { background: #fdecea; border-color: var(--danger); }
+    .empty-note { color: var(--muted); text-align: center; padding: 20px 0; }
+
+    /* ===== 設定：科目管理 ===== */
+    .subject-list { list-style: none; margin: 0; padding: 0; }
+    .subject-item {
       display: flex;
       align-items: center;
-      justify-content: center;
-      font-size: 18px;
-      color: var(--danger);
-      background: transparent;
-      border: 1px solid transparent;
+      gap: 10px;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .subject-item:last-child { border-bottom: none; }
+    .subject-item input[type="color"] {
+      width: 40px; height: 40px;
+      min-height: 40px;
+      border: 1px solid var(--border);
       border-radius: 8px;
+      padding: 2px;
       cursor: pointer;
+      background: #fff;
     }
-    .btn-delete:hover { background: #fef2f2; }
-    .btn-delete:focus-visible {
-      outline: 2px solid var(--danger);
-      outline-offset: 1px;
+    .subject-item .s-name { flex: 1; font-weight: 600; }
+    .subject-item .s-del {
+      min-height: 36px; min-width: 44px;
+      padding: 4px 10px; font-size: 13px;
+      background: #fff; color: var(--danger);
+      border: 1px solid var(--border);
     }
+    .subject-item .s-del:hover { background: #fdecea; }
 
-    .empty-state {
-      color: var(--muted);
-      font-size: 14px;
-      text-align: center;
-      padding: 24px 8px;
-      margin: 0;
-    }
+    .data-buttons { display: flex; flex-direction: column; gap: 10px; }
 
-    /* ===== 注意文（localStorage 使用不可時など） ===== */
-    .notice {
-      background: #fef3c7;
-      color: #92400e;
-      border-radius: 8px;
+    .storage-warn {
+      display: none;
+      background: #fff7ed;
+      border: 1px solid #fdba74;
+      color: #9a3412;
+      border-radius: 10px;
       padding: 10px 12px;
       font-size: 13px;
-      margin-top: 16px;
+      margin-bottom: 12px;
     }
+    .storage-warn.visible { display: block; }
 
-    .footer {
+    .hint { font-size: 12px; color: var(--muted); margin: 4px 0 0; }
+
+    footer.note {
       text-align: center;
       color: var(--muted);
       font-size: 12px;
@@ -246,345 +325,725 @@
 </head>
 <body>
   <div class="app">
+
+    <!-- ===== ヘッダー ===== -->
     <header class="header">
-      <h1>📚 勉強進捗トラッカー</h1>
-      <p class="subtitle">毎日の勉強時間を記録して、頑張りを見える化しよう</p>
+      <h1><span class="icon">📚</span>学習時間トラッカー</h1>
+      <div class="achievement" id="achievement">
+        <div class="ach-top">
+          <span class="ach-time"><strong id="achToday">0分</strong> / <span id="achGoal">60分</span></span>
+          <span class="ach-pct" id="achPct">0%</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" id="achFill"></div>
+        </div>
+      </div>
     </header>
 
-    <!-- 注意メッセージ（必要なときだけ表示） -->
-    <div class="notice" id="notice" style="display:none;" role="alert"></div>
+    <div class="layout">
+      <!-- ===== 左カラム：入力＋設定 ===== -->
+      <div class="col">
 
-    <!-- 機能②：合計表示（画面上部・主役） -->
-    <section class="card summary" aria-label="合計時間">
-      <p class="summary-label">今日の合計</p>
-      <p class="summary-today" id="todayTotal">0分</p>
-      <p class="summary-total">累計：<strong id="grandTotal">0分</strong></p>
-    </section>
+        <!-- 記録入力 -->
+        <section class="card">
+          <h2>✏️ 記録する</h2>
+          <label class="field">
+            <span class="lbl">科目名（候補から選択）</span>
+            <select id="subjectSelect">
+              <option value="">― 候補から選ぶ ―</option>
+            </select>
+          </label>
+          <label class="field">
+            <span class="lbl">科目名（新規は手入力）</span>
+            <input type="text" id="subjectInput" placeholder="例：FP2級" autocomplete="off" />
+          </label>
+          <label class="field">
+            <span class="lbl">学習時間（分）</span>
+            <input type="number" id="minutesInput" min="1" step="1" inputmode="numeric" placeholder="例：45" />
+          </label>
+          <div class="error-msg" id="inputError"></div>
+          <button class="primary" id="recordBtn">記録する</button>
+        </section>
 
-    <!-- 機能①：記録の追加フォーム -->
-    <section class="card" aria-label="勉強の記録を追加">
-      <form id="recordForm" novalidate>
-        <div class="field">
-          <label for="subjectInput">科目</label>
-          <input
-            type="text"
-            id="subjectInput"
-            maxlength="50"
-            placeholder="例：数学"
-            autocomplete="off"
-          />
-        </div>
+        <!-- 設定 -->
+        <section class="card">
+          <h2>⚙️ 設定</h2>
 
-        <div class="field">
-          <label for="minutesInput">時間（分）</label>
-          <div class="minutes-wrap">
-            <input
-              type="number"
-              id="minutesInput"
-              inputmode="numeric"
-              min="1"
-              step="1"
-              placeholder="例：60"
-            />
-            <span class="unit">分</span>
+          <label class="field">
+            <span class="lbl">1日の目標時間（分）／ 空欄で達成率を非表示</span>
+            <input type="number" id="goalInput" min="1" step="1" inputmode="numeric" placeholder="例：60" />
+          </label>
+          <button class="secondary" id="saveGoalBtn">目標時間を保存</button>
+
+          <h3>科目管理（色変更・削除）</h3>
+          <ul class="subject-list" id="subjectAdmin"></ul>
+          <p class="empty-note" id="subjectAdminEmpty">登録済みの科目はありません</p>
+          <p class="hint">※ 科目を削除しても、その科目の記録データは残ります。</p>
+
+          <h3>データ管理</h3>
+          <div class="data-buttons">
+            <button class="secondary" id="exportBtn">JSONエクスポート</button>
+            <button class="danger-outline" id="clearAllBtn">全データ削除</button>
           </div>
-        </div>
+        </section>
+      </div>
 
-        <div class="field">
-          <label for="dateInput">日付</label>
-          <input type="date" id="dateInput" />
-        </div>
+      <!-- ===== 右カラム：グラフ＋履歴 ===== -->
+      <div class="col">
 
-        <p class="error" id="formError" role="alert" aria-live="polite"></p>
+        <!-- グラフ -->
+        <section class="card">
+          <h2>📊 学習グラフ</h2>
+          <div class="tabs" role="tablist">
+            <button id="tabWeek" class="active">週間（7日）</button>
+            <button id="tabMonth">月間（30日）</button>
+          </div>
+          <div class="storage-warn" id="storageWarn"></div>
+          <div class="chart-wrap">
+            <canvas id="chart"></canvas>
+            <div class="chart-empty" id="chartEmpty">まだ記録がありません</div>
+          </div>
+        </section>
 
-        <button type="submit" class="btn-submit">記録する</button>
-      </form>
-    </section>
+        <!-- 履歴 -->
+        <section class="card">
+          <h2>📋 記録履歴</h2>
+          <ul class="history-list" id="historyList"></ul>
+          <p class="empty-note" id="historyEmpty">まだ記録がありません</p>
+        </section>
+      </div>
+    </div>
 
-    <!-- 機能③：記録の一覧と削除 -->
-    <section class="card" aria-label="記録一覧">
-      <h2 class="list-title">記録一覧</h2>
-      <ul class="record-list" id="recordList"></ul>
-      <p class="empty-state" id="emptyState">
-        まだ記録がありません。今日の勉強を記録してみましょう。
-      </p>
-    </section>
-
-    <footer class="footer">
-      データはこの端末（ブラウザ）内にのみ保存されます。
-    </footer>
+    <footer class="note">データはこのブラウザの localStorage にのみ保存されます。</footer>
   </div>
 
   <script>
+  (function () {
     "use strict";
 
-    // ===== 定数 =====
-    var STORAGE_KEY = "studyTracker.records.v1"; // localStorage の保存キー
+    /* ===== 定数 ===== */
+    var K_RECORDS  = "study_records";
+    var K_SUBJECTS = "study_subjects";
+    var K_SETTINGS = "study_settings";
+    var DEFAULT_COLORS = ["#4A90D9", "#E67E22", "#27AE60", "#8E44AD", "#E74C3C"];
+    var MAX_HISTORY = 50;
 
-    // ===== 要素の取得 =====
-    var form = document.getElementById("recordForm");
-    var subjectInput = document.getElementById("subjectInput");
-    var minutesInput = document.getElementById("minutesInput");
-    var dateInput = document.getElementById("dateInput");
-    var formError = document.getElementById("formError");
-    var todayTotalEl = document.getElementById("todayTotal");
-    var grandTotalEl = document.getElementById("grandTotal");
-    var recordListEl = document.getElementById("recordList");
-    var emptyStateEl = document.getElementById("emptyState");
-    var noticeEl = document.getElementById("notice");
+    /* ===== DOM ===== */
+    var $ = function (id) { return document.getElementById(id); };
+    var subjectSelect = $("subjectSelect");
+    var subjectInput  = $("subjectInput");
+    var minutesInput  = $("minutesInput");
+    var inputError    = $("inputError");
+    var recordBtn     = $("recordBtn");
+    var goalInput     = $("goalInput");
+    var saveGoalBtn   = $("saveGoalBtn");
+    var subjectAdmin  = $("subjectAdmin");
+    var subjectAdminEmpty = $("subjectAdminEmpty");
+    var exportBtn     = $("exportBtn");
+    var clearAllBtn   = $("clearAllBtn");
+    var historyList   = $("historyList");
+    var historyEmpty  = $("historyEmpty");
+    var tabWeek       = $("tabWeek");
+    var tabMonth      = $("tabMonth");
+    var chartEmpty    = $("chartEmpty");
+    var storageWarn   = $("storageWarn");
+    // achievement
+    var achievement = $("achievement");
+    var achToday = $("achToday");
+    var achGoal  = $("achGoal");
+    var achPct   = $("achPct");
+    var achFill  = $("achFill");
 
-    // localStorage が使えるかどうかのフラグ（使えない環境でも落ちないように）
-    var storageAvailable = true;
+    /* ===== 状態 ===== */
+    var records  = [];
+    var subjects = [];
+    var settings = { dailyGoalMinutes: null };
+    var currentTab = "week"; // "week" | "month"
+    var chart = null;
 
-    // ===== 日付ユーティリティ =====
+    /* ===== ユーティリティ ===== */
+    function uuid() {
+      if (window.crypto && crypto.randomUUID) { return crypto.randomUUID(); }
+      return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (c) {
+        var r = Math.random() * 16 | 0;
+        var v = c === "x" ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+      });
+    }
 
-    // 端末のローカル日付を "YYYY-MM-DD" で返す
-    function todayString() {
-      var d = new Date();
+    function randomColor() {
+      var h = Math.floor(Math.random() * 360);
+      // HSL → 鮮やかで読みやすい色域に固定
+      return hslToHex(h, 65, 55);
+    }
+    function hslToHex(h, s, l) {
+      s /= 100; l /= 100;
+      var k = function (n) { return (n + h / 30) % 12; };
+      var a = s * Math.min(l, 1 - l);
+      var f = function (n) {
+        var c = l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+        return Math.round(255 * c).toString(16).padStart(2, "0");
+      };
+      return "#" + f(0) + f(8) + f(4);
+    }
+
+    function todayStr() { return dateToStr(new Date()); }
+    function dateToStr(d) {
       var y = d.getFullYear();
       var m = String(d.getMonth() + 1).padStart(2, "0");
       var day = String(d.getDate()).padStart(2, "0");
       return y + "-" + m + "-" + day;
     }
-
-    // "YYYY-MM-DD" を一覧表示用の "MM/DD" に変換
-    function formatShortDate(ymd) {
-      var parts = String(ymd).split("-");
-      if (parts.length === 3) {
-        return parts[1] + "/" + parts[2];
-      }
-      return ymd; // 想定外の形式はそのまま返す
+    // +09:00 を含む ISO 風タイムスタンプ（端末ローカルのオフセットを使用）
+    function nowISOWithOffset() {
+      var d = new Date();
+      var pad = function (n) { return String(n).padStart(2, "0"); };
+      var off = -d.getTimezoneOffset(); // 分
+      var sign = off >= 0 ? "+" : "-";
+      var abs = Math.abs(off);
+      return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) +
+        "T" + pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds()) +
+        sign + pad(Math.floor(abs / 60)) + ":" + pad(abs % 60);
     }
 
-    // 分を「◯時間◯分」表記に変換するルール
-    function formatMinutes(totalMinutes) {
-      var m = Number(totalMinutes) || 0;
-      var hours = Math.floor(m / 60);
-      var mins = m % 60;
-      if (hours === 0) return mins + "分";       // 時が0なら「◯分」
-      if (mins === 0) return hours + "時間";      // 分が0なら「◯時間」
-      return hours + "時間" + mins + "分";        // 両方あれば「◯時間◯分」
+    var WEEK_JP = ["日", "月", "火", "水", "木", "金", "土"];
+    function fmtWeekLabel(d) {
+      return (d.getMonth() + 1) + "/" + d.getDate() + "（" + WEEK_JP[d.getDay()] + "）";
+    }
+    function fmtMonthLabel(d) {
+      return (d.getMonth() + 1) + "/" + d.getDate();
+    }
+    function fmtMinutes(min) {
+      var h = Math.floor(min / 60);
+      var m = min % 60;
+      if (h > 0 && m > 0) return h + "時間" + m + "分";
+      if (h > 0) return h + "時間";
+      return m + "分";
     }
 
-    // ===== データ入出力（localStorage） =====
-
-    // 記録を全件読み込む。失敗時は空配列にフォールバック
-    function loadRecords() {
+    /* ===== localStorage 読み書き ===== */
+    function load() {
+      try { records  = JSON.parse(localStorage.getItem(K_RECORDS))  || []; } catch (e) { records = []; }
+      try { subjects = JSON.parse(localStorage.getItem(K_SUBJECTS)) || []; } catch (e) { subjects = []; }
       try {
-        var raw = localStorage.getItem(STORAGE_KEY);
-        if (!raw) return [];
-        var data = JSON.parse(raw);
-        // 配列でなければ壊れているとみなして空配列にする
-        return Array.isArray(data) ? data : [];
-      } catch (e) {
-        // JSON 破損や localStorage 不可など、何が起きてもアプリは止めない
-        return [];
-      }
+        var s = JSON.parse(localStorage.getItem(K_SETTINGS));
+        settings = (s && typeof s === "object") ? s : { dailyGoalMinutes: null };
+      } catch (e) { settings = { dailyGoalMinutes: null }; }
+      if (!Array.isArray(records)) records = [];
+      if (!Array.isArray(subjects)) subjects = [];
+      if (typeof settings.dailyGoalMinutes === "undefined") settings.dailyGoalMinutes = null;
     }
 
-    // 記録を全件保存し直す（シンプル優先）
-    function saveRecords(records) {
+    function save() {
+      var payload = [
+        [K_RECORDS, JSON.stringify(records)],
+        [K_SUBJECTS, JSON.stringify(subjects)],
+        [K_SETTINGS, JSON.stringify(settings)]
+      ];
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+        payload.forEach(function (kv) { localStorage.setItem(kv[0], kv[1]); });
+        hideStorageWarn();
+        return true;
       } catch (e) {
-        // 保存に失敗してもアプリは継続。ユーザーには注意を出す
-        showNotice("この端末ではデータを保存できないため、リロードすると記録が消えます。");
+        // 容量超過（QuotaExceededError）など
+        showStorageWarn("保存容量の上限（約5MB）に達した可能性があります。古い記録を削除するか、JSONエクスポートしてからデータを整理してください。");
+        return false;
       }
     }
 
-    // 一意なIDを生成（crypto があれば使う／無ければ時刻ベース）
-    function generateId() {
-      if (window.crypto && typeof window.crypto.randomUUID === "function") {
-        return window.crypto.randomUUID();
-      }
-      return Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
+    function showStorageWarn(msg) {
+      storageWarn.textContent = "⚠️ " + msg;
+      storageWarn.classList.add("visible");
+    }
+    function hideStorageWarn() {
+      storageWarn.classList.remove("visible");
     }
 
-    // ===== 集計 =====
-
-    // 今日の合計（分）を計算
-    function sumToday(records) {
-      var t = todayString();
-      return records.reduce(function (acc, r) {
-        return r.studiedOn === t ? acc + Number(r.minutes || 0) : acc;
-      }, 0);
-    }
-
-    // 累計の合計（分）を計算
-    function sumAll(records) {
-      return records.reduce(function (acc, r) {
-        return acc + Number(r.minutes || 0);
-      }, 0);
-    }
-
-    // ===== 描画 =====
-
-    // 合計表示を更新
-    function renderSummary(records) {
-      todayTotalEl.textContent = formatMinutes(sumToday(records));
-      grandTotalEl.textContent = formatMinutes(sumAll(records));
-    }
-
-    // 一覧を新しい順（日付の新しい順→同日は登録の新しい順）で描画
-    function renderList(records) {
-      // 並べ替え用にコピーしてソート
-      var sorted = records.slice().sort(function (a, b) {
-        if (a.studiedOn !== b.studiedOn) {
-          return a.studiedOn < b.studiedOn ? 1 : -1; // 日付の新しい順
+    // localStorage 使用量の目安チェック（5MB に近づいたら警告）
+    function checkStorageUsage() {
+      try {
+        var total = 0;
+        [K_RECORDS, K_SUBJECTS, K_SETTINGS].forEach(function (k) {
+          var v = localStorage.getItem(k);
+          if (v) total += v.length + k.length;
+        });
+        // 文字数 ≒ バイト数（UTF-16 では2倍だが、保守的に約4.5MB を閾値に）
+        if (total * 2 > 4.5 * 1024 * 1024) {
+          showStorageWarn("保存データが容量上限（約5MB）に近づいています。不要な記録の削除やエクスポートをご検討ください。");
         }
-        // 同日は createdAt の新しい順
-        var ca = a.createdAt || "";
-        var cb = b.createdAt || "";
-        if (ca === cb) return 0;
-        return ca < cb ? 1 : -1;
-      });
+      } catch (e) { /* noop */ }
+    }
 
-      // 一旦クリア
-      recordListEl.innerHTML = "";
+    /* ===== 科目ヘルパー ===== */
+    function findSubjectByName(name) {
+      for (var i = 0; i < subjects.length; i++) {
+        if (subjects[i].name === name) return subjects[i];
+      }
+      return null;
+    }
+    function nextDefaultColor() {
+      // まだ使われていないデフォルト色を順に。5科目超はランダム。
+      var used = subjects.map(function (s) { return (s.color || "").toLowerCase(); });
+      for (var i = 0; i < DEFAULT_COLORS.length; i++) {
+        if (used.indexOf(DEFAULT_COLORS[i].toLowerCase()) === -1) return DEFAULT_COLORS[i];
+      }
+      return randomColor();
+    }
+    function ensureSubject(name) {
+      var existing = findSubjectByName(name);
+      if (existing) return existing;
+      var sub = { id: uuid(), name: name, color: nextDefaultColor() };
+      subjects.push(sub);
+      return sub;
+    }
+    // 記録に使われている色を引く（科目が削除済みでもグレーで表示）
+    function colorForSubjectName(name) {
+      var s = findSubjectByName(name);
+      return s ? s.color : "#9aa3af";
+    }
 
-      if (sorted.length === 0) {
-        emptyStateEl.style.display = "block";
+    /* ===== 記録の追加 / 削除 ===== */
+    function addRecord() {
+      inputError.textContent = "";
+      var name = (subjectInput.value || "").trim();
+      if (!name && subjectSelect.value) name = subjectSelect.value;
+      var minutesRaw = (minutesInput.value || "").trim();
+
+      // バリデーション
+      if (!name) {
+        inputError.textContent = "科目名を入力してください。";
         return;
       }
-      emptyStateEl.style.display = "none";
+      if (!minutesRaw) {
+        inputError.textContent = "学習時間（分）を入力してください。";
+        return;
+      }
+      var minutes = Number(minutesRaw);
+      if (!Number.isInteger(minutes) || minutes < 1) {
+        inputError.textContent = "学習時間は1以上の整数（分）で入力してください。";
+        return;
+      }
 
-      sorted.forEach(function (r) {
+      ensureSubject(name);
+      records.push({
+        id: uuid(),
+        date: todayStr(),
+        subject: name,
+        minutes: minutes,
+        createdAt: nowISOWithOffset()
+      });
+
+      if (!save()) return; // 保存失敗時は中断（警告は save 内で表示）
+
+      // 入力欄リセット
+      subjectInput.value = "";
+      subjectSelect.value = "";
+      minutesInput.value = "";
+
+      renderAll();
+      checkStorageUsage();
+    }
+
+    function deleteRecord(id) {
+      if (!window.confirm("この記録を削除しますか？")) return;
+      records = records.filter(function (r) { return r.id !== id; });
+      save();
+      renderAll();
+    }
+
+    /* ===== 科目管理 ===== */
+    function deleteSubject(id) {
+      var sub = subjects.filter(function (s) { return s.id === id; })[0];
+      var label = sub ? "「" + sub.name + "」" : "この科目";
+      if (!window.confirm(label + " を科目一覧から削除しますか？（記録データは残ります）")) return;
+      subjects = subjects.filter(function (s) { return s.id !== id; });
+      save();
+      renderAll();
+    }
+    function updateSubjectColor(id, color) {
+      var sub = subjects.filter(function (s) { return s.id === id; })[0];
+      if (!sub) return;
+      sub.color = color;
+      save();
+      renderHistory();   // 履歴の色チップを更新
+      renderChart();     // グラフの色を更新
+    }
+
+    /* ===== 設定：目標時間 ===== */
+    function saveGoal() {
+      var raw = (goalInput.value || "").trim();
+      if (raw === "") {
+        settings.dailyGoalMinutes = null;
+      } else {
+        var v = Number(raw);
+        if (!Number.isInteger(v) || v < 1) {
+          window.alert("目標時間は1以上の整数（分）で入力してください。");
+          return;
+        }
+        settings.dailyGoalMinutes = v;
+      }
+      save();
+      renderAchievement();
+      renderChart(); // 目標ラインを更新
+    }
+
+    /* ===== データ管理 ===== */
+    function exportJSON() {
+      var data = {
+        study_records: records,
+        study_subjects: subjects,
+        study_settings: settings,
+        exportedAt: nowISOWithOffset()
+      };
+      var blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      a.href = url;
+      a.download = "study-tracker-" + todayStr() + ".json";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    }
+
+    function clearAll() {
+      if (!window.confirm("すべてのデータ（記録・科目・設定）を削除します。よろしいですか？")) return;
+      try {
+        localStorage.removeItem(K_RECORDS);
+        localStorage.removeItem(K_SUBJECTS);
+        localStorage.removeItem(K_SETTINGS);
+      } catch (e) { /* noop */ }
+      records = [];
+      subjects = [];
+      settings = { dailyGoalMinutes: null };
+      hideStorageWarn();
+      renderAll();
+    }
+
+    /* ===== 集計 ===== */
+    function todayTotalMinutes() {
+      var t = todayStr();
+      return records.reduce(function (sum, r) {
+        return r.date === t ? sum + r.minutes : sum;
+      }, 0);
+    }
+
+    // 直近 n 日間（古い→新しい）の日付配列を作る
+    function lastNDates(n) {
+      var arr = [];
+      var base = new Date();
+      base.setHours(0, 0, 0, 0);
+      for (var i = n - 1; i >= 0; i--) {
+        var d = new Date(base);
+        d.setDate(base.getDate() - i);
+        arr.push(d);
+      }
+      return arr;
+    }
+
+    /* ===== レンダリング ===== */
+    function renderAll() {
+      renderSubjectSelect();
+      renderSubjectAdmin();
+      renderAchievement();
+      renderHistory();
+      renderChart();
+    }
+
+    function renderSubjectSelect() {
+      var prev = subjectSelect.value;
+      subjectSelect.innerHTML = '<option value="">― 候補から選ぶ ―</option>';
+      subjects.slice().sort(function (a, b) {
+        return a.name.localeCompare(b.name, "ja");
+      }).forEach(function (s) {
+        var opt = document.createElement("option");
+        opt.value = s.name;
+        opt.textContent = s.name;
+        subjectSelect.appendChild(opt);
+      });
+      // 選択を維持（存在すれば）
+      if (findSubjectByName(prev)) subjectSelect.value = prev;
+    }
+
+    function renderSubjectAdmin() {
+      subjectAdmin.innerHTML = "";
+      if (subjects.length === 0) {
+        subjectAdminEmpty.style.display = "block";
+        return;
+      }
+      subjectAdminEmpty.style.display = "none";
+      subjects.forEach(function (s) {
         var li = document.createElement("li");
-        li.className = "record-item";
+        li.className = "subject-item";
 
-        var dateSpan = document.createElement("span");
-        dateSpan.className = "record-date";
-        dateSpan.textContent = formatShortDate(r.studiedOn);
-
-        var subjectSpan = document.createElement("span");
-        subjectSpan.className = "record-subject";
-        subjectSpan.textContent = r.subject; // textContent なので安全（XSS対策）
-
-        var minutesSpan = document.createElement("span");
-        minutesSpan.className = "record-minutes";
-        minutesSpan.textContent = formatMinutes(r.minutes);
-
-        var delBtn = document.createElement("button");
-        delBtn.className = "btn-delete";
-        delBtn.type = "button";
-        delBtn.textContent = "🗑";
-        // 状態が色だけに依存しないようテキストラベルも付与
-        delBtn.setAttribute("aria-label", r.studiedOn + " の " + r.subject + " を削除");
-        delBtn.addEventListener("click", function () {
-          handleDelete(r.id, r.subject);
+        var color = document.createElement("input");
+        color.type = "color";
+        color.value = normalizeHex(s.color);
+        color.title = "表示色を変更";
+        color.addEventListener("input", function () {
+          updateSubjectColor(s.id, color.value);
         });
 
-        li.appendChild(dateSpan);
-        li.appendChild(subjectSpan);
-        li.appendChild(minutesSpan);
-        li.appendChild(delBtn);
-        recordListEl.appendChild(li);
+        var name = document.createElement("span");
+        name.className = "s-name";
+        name.textContent = s.name;
+
+        var del = document.createElement("button");
+        del.className = "s-del";
+        del.textContent = "削除";
+        del.addEventListener("click", function () { deleteSubject(s.id); });
+
+        li.appendChild(color);
+        li.appendChild(name);
+        li.appendChild(del);
+        subjectAdmin.appendChild(li);
       });
     }
-
-    // 画面全体を再描画
-    function renderAll() {
-      var records = loadRecords();
-      renderSummary(records);
-      renderList(records);
+    function normalizeHex(c) {
+      if (typeof c === "string" && /^#[0-9a-fA-F]{6}$/.test(c)) return c;
+      return "#999999";
     }
 
-    // ===== 通知（注意メッセージ） =====
-    function showNotice(message) {
-      noticeEl.textContent = message;
-      noticeEl.style.display = "block";
+    function renderAchievement() {
+      var goal = settings.dailyGoalMinutes;
+      goalInput.value = (goal === null || typeof goal === "undefined") ? "" : goal;
+
+      if (!goal || goal <= 0) {
+        achievement.classList.remove("visible", "done", "over");
+        return;
+      }
+      achievement.classList.add("visible");
+      var today = todayTotalMinutes();
+      var pct = Math.round((today / goal) * 100);
+
+      achToday.textContent = today + "分";
+      achGoal.textContent = goal + "分";
+      achPct.textContent = pct + "%";
+      achFill.style.width = Math.min(pct, 100) + "%";
+
+      achievement.classList.remove("done", "over");
+      if (today > goal) {
+        achievement.classList.add("done", "over");
+      } else if (today === goal) {
+        achievement.classList.add("done");
+      }
     }
 
-    // ===== バリデーション＆追加処理 =====
-    function handleSubmit(event) {
-      event.preventDefault();
-      formError.textContent = ""; // 古いエラーを消す
-
-      // 科目：前後の空白を除去
-      var subject = subjectInput.value.trim();
-      if (subject === "") {
-        formError.textContent = "科目を入力してください";
+    function renderHistory() {
+      historyList.innerHTML = "";
+      if (records.length === 0) {
+        historyEmpty.style.display = "block";
         return;
       }
-      if (subject.length > 50) {
-        formError.textContent = "科目は50文字以内で入力してください";
-        return;
-      }
+      historyEmpty.style.display = "none";
 
-      // 時間：1以上の整数のみ許可
-      var raw = minutesInput.value.trim();
-      var minutes = Number(raw);
-      if (raw === "" || !Number.isInteger(minutes) || minutes < 1) {
-        formError.textContent = "時間は1以上の数字で入力してください";
-        return;
-      }
-
-      // 日付：未入力なら今日
-      var studiedOn = dateInput.value ? dateInput.value : todayString();
-
-      // レコードを作成して保存
-      var records = loadRecords();
-      records.push({
-        id: generateId(),
-        subject: subject,
-        minutes: minutes,
-        studiedOn: studiedOn,
-        createdAt: new Date().toISOString()
+      // 新しい順（createdAt 優先、なければ date）
+      var sorted = records.slice().sort(function (a, b) {
+        var ka = a.createdAt || a.date;
+        var kb = b.createdAt || b.date;
+        return kb < ka ? -1 : (kb > ka ? 1 : 0);
       });
-      saveRecords(records);
+      var shown = sorted.slice(0, MAX_HISTORY);
 
-      // フォームをクリア（科目・時間を空に、日付は今日へ）
-      subjectInput.value = "";
-      minutesInput.value = "";
-      dateInput.value = todayString();
-      formError.textContent = "";
+      shown.forEach(function (r) {
+        var li = document.createElement("li");
+        li.className = "history-item";
 
-      // 即時更新
-      renderAll();
-      subjectInput.focus();
-    }
+        var dot = document.createElement("span");
+        dot.className = "hi-color";
+        dot.style.background = colorForSubjectName(r.subject);
 
-    // ===== 削除処理 =====
-    function handleDelete(id, subject) {
-      // 確認ダイアログ（誤操作防止）
-      var ok = window.confirm("「" + subject + "」のこの記録を削除しますか？");
-      if (!ok) return;
+        var main = document.createElement("div");
+        main.className = "hi-main";
+        var subj = document.createElement("div");
+        subj.className = "hi-subject";
+        subj.textContent = r.subject;
+        var date = document.createElement("div");
+        date.className = "hi-date";
+        date.textContent = formatHistoryDate(r.date);
+        main.appendChild(subj);
+        main.appendChild(date);
 
-      var records = loadRecords().filter(function (r) {
-        return r.id !== id;
+        var min = document.createElement("div");
+        min.className = "hi-minutes";
+        min.textContent = r.minutes + "分";
+
+        var del = document.createElement("button");
+        del.className = "hi-del";
+        del.textContent = "削除";
+        del.addEventListener("click", function () { deleteRecord(r.id); });
+
+        li.appendChild(dot);
+        li.appendChild(main);
+        li.appendChild(min);
+        li.appendChild(del);
+        historyList.appendChild(li);
       });
-      saveRecords(records);
-      renderAll();
+    }
+    function formatHistoryDate(dateStr) {
+      var parts = (dateStr || "").split("-");
+      if (parts.length !== 3) return dateStr || "";
+      var d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+      return (d.getMonth() + 1) + "/" + d.getDate() + "（" + WEEK_JP[d.getDay()] + "）";
     }
 
-    // ===== 初期化 =====
-    function init() {
-      // localStorage が使えるか軽くテスト
-      try {
-        var testKey = "__studyTracker_test__";
-        localStorage.setItem(testKey, "1");
-        localStorage.removeItem(testKey);
-      } catch (e) {
-        storageAvailable = false;
-        showNotice("このブラウザではデータ保存（localStorage）が使えません。記録は一時的に表示されますが、リロードで消えます。");
+    /* ===== グラフ ===== */
+    function renderChart() {
+      var n = currentTab === "week" ? 7 : 30;
+      var dates = lastNDates(n);
+      var dateKeys = dates.map(dateToStr);
+      var labels = dates.map(currentTab === "week" ? fmtWeekLabel : fmtMonthLabel);
+
+      // この期間に登場する科目名を収集
+      var inRange = records.filter(function (r) { return dateKeys.indexOf(r.date) !== -1; });
+
+      // データの有無で空表示を切り替え
+      if (inRange.length === 0) {
+        chartEmpty.style.display = "block";
+      } else {
+        chartEmpty.style.display = "none";
       }
 
-      // 日付欄の初期値を今日に
-      dateInput.value = todayString();
+      var subjectNames = [];
+      inRange.forEach(function (r) {
+        if (subjectNames.indexOf(r.subject) === -1) subjectNames.push(r.subject);
+      });
 
-      // イベント登録
-      form.addEventListener("submit", handleSubmit);
+      // 科目ごとの日次合計を作る
+      var datasets = subjectNames.map(function (name) {
+        var data = dateKeys.map(function (dk) {
+          return records.reduce(function (sum, r) {
+            return (r.date === dk && r.subject === name) ? sum + r.minutes : sum;
+          }, 0);
+        });
+        var color = colorForSubjectName(name);
+        return {
+          label: name,
+          data: data,
+          backgroundColor: color,
+          borderColor: color,
+          borderWidth: 0,
+          stack: "study"
+        };
+      });
 
-      // 初回描画
-      renderAll();
+      var goal = settings.dailyGoalMinutes;
+
+      buildChart(labels, datasets, goal);
     }
 
-    // DOM 準備完了後に初期化
-    if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", init);
-    } else {
-      init();
+    function buildChart(labels, datasets, goal) {
+      var ctx = document.getElementById("chart").getContext("2d");
+
+      // 目標ラインプラグイン（破線）
+      var goalLine = {
+        id: "goalLine",
+        afterDatasetsDraw: function (c) {
+          if (!goal || goal <= 0) return;
+          var yScale = c.scales.y;
+          if (!yScale) return;
+          var y = yScale.getPixelForValue(goal);
+          var area = c.chartArea;
+          if (y < area.top || y > area.bottom) return;
+          var g = c.ctx;
+          g.save();
+          g.beginPath();
+          g.setLineDash([6, 5]);
+          g.lineWidth = 2;
+          g.strokeStyle = "#E74C3C";
+          g.moveTo(area.left, y);
+          g.lineTo(area.right, y);
+          g.stroke();
+          // ラベル
+          g.setLineDash([]);
+          g.fillStyle = "#E74C3C";
+          g.font = "12px -apple-system, sans-serif";
+          g.textAlign = "right";
+          g.fillText("目標 " + goal + "分", area.right - 4, y - 4);
+          g.restore();
+        }
+      };
+
+      var config = {
+        type: "bar",
+        data: { labels: labels, datasets: datasets },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: "index", intersect: false },
+          scales: {
+            x: { stacked: true, grid: { display: false } },
+            y: {
+              stacked: true,
+              beginAtZero: true,
+              title: { display: true, text: "学習時間（分）" },
+              ticks: { precision: 0 }
+            }
+          },
+          plugins: {
+            legend: { position: "bottom", labels: { boxWidth: 12, font: { size: 12 } } },
+            tooltip: {
+              callbacks: {
+                label: function (item) {
+                  return item.dataset.label + ": " + item.parsed.y + "分";
+                },
+                footer: function (items) {
+                  var total = items.reduce(function (s, it) { return s + (it.parsed.y || 0); }, 0);
+                  return "合計: " + total + "分";
+                }
+              }
+            }
+          }
+        },
+        plugins: [goalLine]
+      };
+
+      if (chart) {
+        chart.data = config.data;
+        chart.options = config.options;
+        // プラグインは goal をクロージャで参照するため再生成が必要
+        chart.destroy();
+        chart = new Chart(ctx, config);
+      } else {
+        chart = new Chart(ctx, config);
+      }
     }
+
+    function setTab(tab) {
+      currentTab = tab;
+      tabWeek.classList.toggle("active", tab === "week");
+      tabMonth.classList.toggle("active", tab === "month");
+      renderChart();
+    }
+
+    /* ===== イベント結線 ===== */
+    recordBtn.addEventListener("click", addRecord);
+    minutesInput.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") { e.preventDefault(); addRecord(); }
+    });
+    subjectInput.addEventListener("input", function () {
+      // 手入力を始めたらプルダウンの選択はクリア（手入力優先）
+      if (subjectInput.value) subjectSelect.value = "";
+    });
+    subjectSelect.addEventListener("change", function () {
+      if (subjectSelect.value) subjectInput.value = "";
+    });
+
+    saveGoalBtn.addEventListener("click", saveGoal);
+    goalInput.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") { e.preventDefault(); saveGoal(); }
+    });
+
+    exportBtn.addEventListener("click", exportJSON);
+    clearAllBtn.addEventListener("click", clearAll);
+    tabWeek.addEventListener("click", function () { setTab("week"); });
+    tabMonth.addEventListener("click", function () { setTab("month"); });
+
+    /* ===== 初期化 ===== */
+    load();
+    checkStorageUsage();
+    renderAll();
+  })();
   </script>
 </body>
 </html>
