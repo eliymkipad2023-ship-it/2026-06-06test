@@ -3,92 +3,588 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>タスク管理アプリ</title>
-  <link rel="stylesheet" href="styles.css" />
+  <title>勉強進捗トラッカー</title>
+  <!--
+    勉強進捗トラッカー（単一ファイル・外部依存ゼロ）
+    HTML / CSS / JavaScript をすべてこの1ファイルにインラインで記述しています。
+    データはブラウザの localStorage にのみ保存され、サーバーへは送信されません。
+  -->
+  <style>
+    /* ===== 基本設定（リセット＆カラー） ===== */
+    :root {
+      --bg: #f5f7fa;          /* 背景：淡いグレー */
+      --card: #ffffff;        /* カード／フォーム */
+      --accent: #2563eb;      /* アクセント（青） */
+      --accent-press: #1d4ed8;/* 押下時の青 */
+      --text: #1f2937;        /* 本文テキスト */
+      --muted: #6b7280;       /* 補助テキスト */
+      --danger: #ef4444;      /* 削除（控えめな赤） */
+      --border: #e5e7eb;      /* 罫線 */
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN",
+                   "Hiragino Sans", "Yu Gothic", Meiryo, sans-serif;
+      line-height: 1.6;
+      -webkit-text-size-adjust: 100%;
+    }
+
+    /* ===== レイアウト（中央寄せ・最大幅） ===== */
+    .app {
+      max-width: 520px;
+      margin: 0 auto;
+      padding: 16px 16px 48px;
+    }
+
+    .header {
+      text-align: center;
+      padding: 8px 0 4px;
+    }
+    .header h1 {
+      font-size: 22px;
+      margin: 8px 0 4px;
+    }
+    .header .subtitle {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    /* ===== 共通カード ===== */
+    .card {
+      background: var(--card);
+      border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.04);
+      padding: 20px;
+      margin-top: 16px;
+    }
+
+    /* ===== 合計表示（主役） ===== */
+    .summary {
+      text-align: center;
+    }
+    .summary-label {
+      color: var(--muted);
+      font-size: 14px;
+      margin: 0;
+    }
+    .summary-today {
+      font-size: 48px;
+      font-weight: 800;
+      color: var(--accent);
+      margin: 4px 0 8px;
+      line-height: 1.1;
+      word-break: keep-all;
+    }
+    .summary-total {
+      color: var(--muted);
+      font-size: 15px;
+      margin: 0;
+    }
+    .summary-total strong {
+      color: var(--text);
+      font-weight: 700;
+    }
+
+    /* ===== フォーム ===== */
+    .field {
+      margin-bottom: 14px;
+    }
+    .field label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+    .field input {
+      width: 100%;
+      min-height: 44px;
+      padding: 0 12px;
+      font-size: 16px; /* iOS の自動ズーム防止のため16px以上 */
+      color: var(--text);
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+    .field input:focus {
+      outline: 2px solid var(--accent);
+      outline-offset: 1px;
+      border-color: var(--accent);
+    }
+    .minutes-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .minutes-wrap input {
+      flex: 1;
+    }
+    .minutes-wrap .unit {
+      color: var(--muted);
+      font-size: 15px;
+    }
+
+    .btn-submit {
+      width: 100%;
+      min-height: 48px;
+      margin-top: 4px;
+      font-size: 16px;
+      font-weight: 700;
+      color: #fff;
+      background: var(--accent);
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    .btn-submit:hover { background: var(--accent-press); }
+    .btn-submit:active { background: var(--accent-press); }
+    .btn-submit:focus-visible {
+      outline: 2px solid var(--accent-press);
+      outline-offset: 2px;
+    }
+
+    /* ===== エラー表示 ===== */
+    .error {
+      color: var(--danger);
+      font-size: 13px;
+      margin: 0 0 12px;
+      min-height: 18px;
+    }
+    .error:empty { margin: 0; min-height: 0; }
+
+    /* ===== 一覧 ===== */
+    .list-title {
+      font-size: 16px;
+      margin: 0 0 12px;
+    }
+    .record-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+    .record-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 4px;
+      border-bottom: 1px solid var(--border);
+    }
+    .record-item:last-child { border-bottom: none; }
+    .record-date {
+      color: var(--muted);
+      font-size: 13px;
+      width: 52px;
+      flex-shrink: 0;
+    }
+    .record-subject {
+      flex: 1;
+      font-size: 15px;
+      font-weight: 600;
+      word-break: break-word;
+    }
+    .record-minutes {
+      color: var(--text);
+      font-size: 14px;
+      white-space: nowrap;
+    }
+    .btn-delete {
+      flex-shrink: 0;
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      color: var(--danger);
+      background: transparent;
+      border: 1px solid transparent;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    .btn-delete:hover { background: #fef2f2; }
+    .btn-delete:focus-visible {
+      outline: 2px solid var(--danger);
+      outline-offset: 1px;
+    }
+
+    .empty-state {
+      color: var(--muted);
+      font-size: 14px;
+      text-align: center;
+      padding: 24px 8px;
+      margin: 0;
+    }
+
+    /* ===== 注意文（localStorage 使用不可時など） ===== */
+    .notice {
+      background: #fef3c7;
+      color: #92400e;
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 13px;
+      margin-top: 16px;
+    }
+
+    .footer {
+      text-align: center;
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 24px;
+    }
+  </style>
 </head>
 <body>
   <div class="app">
     <header class="header">
-      <h1>📋 タスク管理</h1>
-      <p class="subtitle">勉強や仕事の進捗をシンプルに管理</p>
+      <h1>📚 勉強進捗トラッカー</h1>
+      <p class="subtitle">毎日の勉強時間を記録して、頑張りを見える化しよう</p>
     </header>
 
-    <!-- 進捗サマリー -->
-    <section class="summary" aria-label="進捗サマリー">
-      <div class="summary-card">
-        <span class="summary-num" id="statTotal">0</span>
-        <span class="summary-label">全タスク</span>
-      </div>
-      <div class="summary-card">
-        <span class="summary-num" id="statActive">0</span>
-        <span class="summary-label">未完了</span>
-      </div>
-      <div class="summary-card">
-        <span class="summary-num" id="statDone">0</span>
-        <span class="summary-label">完了</span>
-      </div>
-      <div class="summary-card progress-card">
-        <div class="progress-ring">
-          <span class="summary-num" id="statRate">0%</span>
-        </div>
-        <span class="summary-label">達成率</span>
-      </div>
+    <!-- 注意メッセージ（必要なときだけ表示） -->
+    <div class="notice" id="notice" style="display:none;" role="alert"></div>
+
+    <!-- 機能②：合計表示（画面上部・主役） -->
+    <section class="card summary" aria-label="合計時間">
+      <p class="summary-label">今日の合計</p>
+      <p class="summary-today" id="todayTotal">0分</p>
+      <p class="summary-total">累計：<strong id="grandTotal">0分</strong></p>
     </section>
 
-    <div class="progress-bar" aria-hidden="true">
-      <div class="progress-bar-fill" id="progressFill"></div>
-    </div>
+    <!-- 機能①：記録の追加フォーム -->
+    <section class="card" aria-label="勉強の記録を追加">
+      <form id="recordForm" novalidate>
+        <div class="field">
+          <label for="subjectInput">科目</label>
+          <input
+            type="text"
+            id="subjectInput"
+            maxlength="50"
+            placeholder="例：数学"
+            autocomplete="off"
+          />
+        </div>
 
-    <!-- タスク追加フォーム -->
-    <form class="task-form" id="taskForm">
-      <input
-        type="text"
-        id="titleInput"
-        class="title-input"
-        placeholder="新しいタスクを入力..."
-        autocomplete="off"
-        required
-      />
-      <div class="form-row">
-        <select id="categoryInput" class="form-select" aria-label="カテゴリ">
-          <option value="study">📚 勉強</option>
-          <option value="work">💼 仕事</option>
-          <option value="other">🌱 その他</option>
-        </select>
-        <select id="priorityInput" class="form-select" aria-label="優先度">
-          <option value="high">🔴 高</option>
-          <option value="medium" selected>🟡 中</option>
-          <option value="low">🔵 低</option>
-        </select>
-        <input type="date" id="dueInput" class="form-date" aria-label="期限" />
-        <button type="submit" class="btn-add">追加</button>
-      </div>
-    </form>
+        <div class="field">
+          <label for="minutesInput">時間（分）</label>
+          <div class="minutes-wrap">
+            <input
+              type="number"
+              id="minutesInput"
+              inputmode="numeric"
+              min="1"
+              step="1"
+              placeholder="例：60"
+            />
+            <span class="unit">分</span>
+          </div>
+        </div>
 
-    <!-- フィルター -->
-    <div class="filters" id="filters">
-      <div class="filter-group" id="statusFilters">
-        <button class="filter-btn active" data-status="all">すべて</button>
-        <button class="filter-btn" data-status="active">未完了</button>
-        <button class="filter-btn" data-status="done">完了</button>
-      </div>
-      <div class="filter-group" id="categoryFilters">
-        <button class="filter-btn active" data-category="all">全カテゴリ</button>
-        <button class="filter-btn" data-category="study">📚 勉強</button>
-        <button class="filter-btn" data-category="work">💼 仕事</button>
-        <button class="filter-btn" data-category="other">🌱 その他</button>
-      </div>
-    </div>
+        <div class="field">
+          <label for="dateInput">日付</label>
+          <input type="date" id="dateInput" />
+        </div>
 
-    <!-- タスク一覧 -->
-    <ul class="task-list" id="taskList"></ul>
-    <p class="empty-state" id="emptyState">タスクはまだありません。上のフォームから追加しましょう！</p>
+        <p class="error" id="formError" role="alert" aria-live="polite"></p>
+
+        <button type="submit" class="btn-submit">記録する</button>
+      </form>
+    </section>
+
+    <!-- 機能③：記録の一覧と削除 -->
+    <section class="card" aria-label="記録一覧">
+      <h2 class="list-title">記録一覧</h2>
+      <ul class="record-list" id="recordList"></ul>
+      <p class="empty-state" id="emptyState">
+        まだ記録がありません。今日の勉強を記録してみましょう。
+      </p>
+    </section>
 
     <footer class="footer">
-      <button class="btn-clear" id="clearDoneBtn">完了タスクを削除</button>
+      データはこの端末（ブラウザ）内にのみ保存されます。
     </footer>
   </div>
 
-  <script src="app.js"></script>
+  <script>
+    "use strict";
+
+    // ===== 定数 =====
+    var STORAGE_KEY = "studyTracker.records.v1"; // localStorage の保存キー
+
+    // ===== 要素の取得 =====
+    var form = document.getElementById("recordForm");
+    var subjectInput = document.getElementById("subjectInput");
+    var minutesInput = document.getElementById("minutesInput");
+    var dateInput = document.getElementById("dateInput");
+    var formError = document.getElementById("formError");
+    var todayTotalEl = document.getElementById("todayTotal");
+    var grandTotalEl = document.getElementById("grandTotal");
+    var recordListEl = document.getElementById("recordList");
+    var emptyStateEl = document.getElementById("emptyState");
+    var noticeEl = document.getElementById("notice");
+
+    // localStorage が使えるかどうかのフラグ（使えない環境でも落ちないように）
+    var storageAvailable = true;
+
+    // ===== 日付ユーティリティ =====
+
+    // 端末のローカル日付を "YYYY-MM-DD" で返す
+    function todayString() {
+      var d = new Date();
+      var y = d.getFullYear();
+      var m = String(d.getMonth() + 1).padStart(2, "0");
+      var day = String(d.getDate()).padStart(2, "0");
+      return y + "-" + m + "-" + day;
+    }
+
+    // "YYYY-MM-DD" を一覧表示用の "MM/DD" に変換
+    function formatShortDate(ymd) {
+      var parts = String(ymd).split("-");
+      if (parts.length === 3) {
+        return parts[1] + "/" + parts[2];
+      }
+      return ymd; // 想定外の形式はそのまま返す
+    }
+
+    // 分を「◯時間◯分」表記に変換するルール
+    function formatMinutes(totalMinutes) {
+      var m = Number(totalMinutes) || 0;
+      var hours = Math.floor(m / 60);
+      var mins = m % 60;
+      if (hours === 0) return mins + "分";       // 時が0なら「◯分」
+      if (mins === 0) return hours + "時間";      // 分が0なら「◯時間」
+      return hours + "時間" + mins + "分";        // 両方あれば「◯時間◯分」
+    }
+
+    // ===== データ入出力（localStorage） =====
+
+    // 記録を全件読み込む。失敗時は空配列にフォールバック
+    function loadRecords() {
+      try {
+        var raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return [];
+        var data = JSON.parse(raw);
+        // 配列でなければ壊れているとみなして空配列にする
+        return Array.isArray(data) ? data : [];
+      } catch (e) {
+        // JSON 破損や localStorage 不可など、何が起きてもアプリは止めない
+        return [];
+      }
+    }
+
+    // 記録を全件保存し直す（シンプル優先）
+    function saveRecords(records) {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+      } catch (e) {
+        // 保存に失敗してもアプリは継続。ユーザーには注意を出す
+        showNotice("この端末ではデータを保存できないため、リロードすると記録が消えます。");
+      }
+    }
+
+    // 一意なIDを生成（crypto があれば使う／無ければ時刻ベース）
+    function generateId() {
+      if (window.crypto && typeof window.crypto.randomUUID === "function") {
+        return window.crypto.randomUUID();
+      }
+      return Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
+    }
+
+    // ===== 集計 =====
+
+    // 今日の合計（分）を計算
+    function sumToday(records) {
+      var t = todayString();
+      return records.reduce(function (acc, r) {
+        return r.studiedOn === t ? acc + Number(r.minutes || 0) : acc;
+      }, 0);
+    }
+
+    // 累計の合計（分）を計算
+    function sumAll(records) {
+      return records.reduce(function (acc, r) {
+        return acc + Number(r.minutes || 0);
+      }, 0);
+    }
+
+    // ===== 描画 =====
+
+    // 合計表示を更新
+    function renderSummary(records) {
+      todayTotalEl.textContent = formatMinutes(sumToday(records));
+      grandTotalEl.textContent = formatMinutes(sumAll(records));
+    }
+
+    // 一覧を新しい順（日付の新しい順→同日は登録の新しい順）で描画
+    function renderList(records) {
+      // 並べ替え用にコピーしてソート
+      var sorted = records.slice().sort(function (a, b) {
+        if (a.studiedOn !== b.studiedOn) {
+          return a.studiedOn < b.studiedOn ? 1 : -1; // 日付の新しい順
+        }
+        // 同日は createdAt の新しい順
+        var ca = a.createdAt || "";
+        var cb = b.createdAt || "";
+        if (ca === cb) return 0;
+        return ca < cb ? 1 : -1;
+      });
+
+      // 一旦クリア
+      recordListEl.innerHTML = "";
+
+      if (sorted.length === 0) {
+        emptyStateEl.style.display = "block";
+        return;
+      }
+      emptyStateEl.style.display = "none";
+
+      sorted.forEach(function (r) {
+        var li = document.createElement("li");
+        li.className = "record-item";
+
+        var dateSpan = document.createElement("span");
+        dateSpan.className = "record-date";
+        dateSpan.textContent = formatShortDate(r.studiedOn);
+
+        var subjectSpan = document.createElement("span");
+        subjectSpan.className = "record-subject";
+        subjectSpan.textContent = r.subject; // textContent なので安全（XSS対策）
+
+        var minutesSpan = document.createElement("span");
+        minutesSpan.className = "record-minutes";
+        minutesSpan.textContent = formatMinutes(r.minutes);
+
+        var delBtn = document.createElement("button");
+        delBtn.className = "btn-delete";
+        delBtn.type = "button";
+        delBtn.textContent = "🗑";
+        // 状態が色だけに依存しないようテキストラベルも付与
+        delBtn.setAttribute("aria-label", r.studiedOn + " の " + r.subject + " を削除");
+        delBtn.addEventListener("click", function () {
+          handleDelete(r.id, r.subject);
+        });
+
+        li.appendChild(dateSpan);
+        li.appendChild(subjectSpan);
+        li.appendChild(minutesSpan);
+        li.appendChild(delBtn);
+        recordListEl.appendChild(li);
+      });
+    }
+
+    // 画面全体を再描画
+    function renderAll() {
+      var records = loadRecords();
+      renderSummary(records);
+      renderList(records);
+    }
+
+    // ===== 通知（注意メッセージ） =====
+    function showNotice(message) {
+      noticeEl.textContent = message;
+      noticeEl.style.display = "block";
+    }
+
+    // ===== バリデーション＆追加処理 =====
+    function handleSubmit(event) {
+      event.preventDefault();
+      formError.textContent = ""; // 古いエラーを消す
+
+      // 科目：前後の空白を除去
+      var subject = subjectInput.value.trim();
+      if (subject === "") {
+        formError.textContent = "科目を入力してください";
+        return;
+      }
+      if (subject.length > 50) {
+        formError.textContent = "科目は50文字以内で入力してください";
+        return;
+      }
+
+      // 時間：1以上の整数のみ許可
+      var raw = minutesInput.value.trim();
+      var minutes = Number(raw);
+      if (raw === "" || !Number.isInteger(minutes) || minutes < 1) {
+        formError.textContent = "時間は1以上の数字で入力してください";
+        return;
+      }
+
+      // 日付：未入力なら今日
+      var studiedOn = dateInput.value ? dateInput.value : todayString();
+
+      // レコードを作成して保存
+      var records = loadRecords();
+      records.push({
+        id: generateId(),
+        subject: subject,
+        minutes: minutes,
+        studiedOn: studiedOn,
+        createdAt: new Date().toISOString()
+      });
+      saveRecords(records);
+
+      // フォームをクリア（科目・時間を空に、日付は今日へ）
+      subjectInput.value = "";
+      minutesInput.value = "";
+      dateInput.value = todayString();
+      formError.textContent = "";
+
+      // 即時更新
+      renderAll();
+      subjectInput.focus();
+    }
+
+    // ===== 削除処理 =====
+    function handleDelete(id, subject) {
+      // 確認ダイアログ（誤操作防止）
+      var ok = window.confirm("「" + subject + "」のこの記録を削除しますか？");
+      if (!ok) return;
+
+      var records = loadRecords().filter(function (r) {
+        return r.id !== id;
+      });
+      saveRecords(records);
+      renderAll();
+    }
+
+    // ===== 初期化 =====
+    function init() {
+      // localStorage が使えるか軽くテスト
+      try {
+        var testKey = "__studyTracker_test__";
+        localStorage.setItem(testKey, "1");
+        localStorage.removeItem(testKey);
+      } catch (e) {
+        storageAvailable = false;
+        showNotice("このブラウザではデータ保存（localStorage）が使えません。記録は一時的に表示されますが、リロードで消えます。");
+      }
+
+      // 日付欄の初期値を今日に
+      dateInput.value = todayString();
+
+      // イベント登録
+      form.addEventListener("submit", handleSubmit);
+
+      // 初回描画
+      renderAll();
+    }
+
+    // DOM 準備完了後に初期化
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", init);
+    } else {
+      init();
+    }
+  </script>
 </body>
 </html>
