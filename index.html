@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>タスク管理アプリ</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <h1>📋 タスク管理</h1>
+      <p class="subtitle">勉強や仕事の進捗をシンプルに管理</p>
+    </header>
+
+    <!-- 進捗サマリー -->
+    <section class="summary" aria-label="進捗サマリー">
+      <div class="summary-card">
+        <span class="summary-num" id="statTotal">0</span>
+        <span class="summary-label">全タスク</span>
+      </div>
+      <div class="summary-card">
+        <span class="summary-num" id="statActive">0</span>
+        <span class="summary-label">未完了</span>
+      </div>
+      <div class="summary-card">
+        <span class="summary-num" id="statDone">0</span>
+        <span class="summary-label">完了</span>
+      </div>
+      <div class="summary-card progress-card">
+        <div class="progress-ring">
+          <span class="summary-num" id="statRate">0%</span>
+        </div>
+        <span class="summary-label">達成率</span>
+      </div>
+    </section>
+
+    <div class="progress-bar" aria-hidden="true">
+      <div class="progress-bar-fill" id="progressFill"></div>
+    </div>
+
+    <!-- タスク追加フォーム -->
+    <form class="task-form" id="taskForm">
+      <input
+        type="text"
+        id="titleInput"
+        class="title-input"
+        placeholder="新しいタスクを入力..."
+        autocomplete="off"
+        required
+      />
+      <div class="form-row">
+        <select id="categoryInput" class="form-select" aria-label="カテゴリ">
+          <option value="study">📚 勉強</option>
+          <option value="work">💼 仕事</option>
+          <option value="other">🌱 その他</option>
+        </select>
+        <select id="priorityInput" class="form-select" aria-label="優先度">
+          <option value="high">🔴 高</option>
+          <option value="medium" selected>🟡 中</option>
+          <option value="low">🔵 低</option>
+        </select>
+        <input type="date" id="dueInput" class="form-date" aria-label="期限" />
+        <button type="submit" class="btn-add">追加</button>
+      </div>
+    </form>
+
+    <!-- フィルター -->
+    <div class="filters" id="filters">
+      <div class="filter-group" id="statusFilters">
+        <button class="filter-btn active" data-status="all">すべて</button>
+        <button class="filter-btn" data-status="active">未完了</button>
+        <button class="filter-btn" data-status="done">完了</button>
+      </div>
+      <div class="filter-group" id="categoryFilters">
+        <button class="filter-btn active" data-category="all">全カテゴリ</button>
+        <button class="filter-btn" data-category="study">📚 勉強</button>
+        <button class="filter-btn" data-category="work">💼 仕事</button>
+        <button class="filter-btn" data-category="other">🌱 その他</button>
+      </div>
+    </div>
+
+    <!-- タスク一覧 -->
+    <ul class="task-list" id="taskList"></ul>
+    <p class="empty-state" id="emptyState">タスクはまだありません。上のフォームから追加しましょう！</p>
+
+    <footer class="footer">
+      <button class="btn-clear" id="clearDoneBtn">完了タスクを削除</button>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
